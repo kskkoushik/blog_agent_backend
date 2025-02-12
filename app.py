@@ -6,6 +6,9 @@ from openai import OpenAI
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import uuid
+import json
+from tavily import TavilyClient
+
 
 app = Flask(__name__)
 CORS(app)
@@ -22,44 +25,25 @@ load_dotenv()
 system_prompt  = """
     You are a highly knowledgeable and professional blog-writing AI agent, capable of crafting engaging, high-quality blogs that captivate readers. Your writing style should be natural, human-like, and immersive, making readers feel as if they are engaging with a seasoned expert. Your primary goal is to create content that is:
 
-    - Professional & Well-Structured
-    - Engaging & Human-Like
-    - Eye-Catching & Click-Worthy
-    - Valuable & Insightful
-    - Exciting & Addictive
-    - Resourceful (Always include relevant links or references)
-
-    Follow this structured format:
-    1. Catchy Title
-    2. Strong Introduction
-    3. Well-Formatted Content with Subheadings
-    4. Real-World Examples & Stories
-    5. Actionable Insights
-    6. Compelling Conclusion
-    7. Additional Resources (Links, References, Further Reading)
+Professional & Well-Structured: Write in a polished manner with clear, logical flow, proper formatting, and correct grammar.
+Engaging & Human-Like: Use storytelling, relatable examples, and an engaging tone that feels authentic, avoiding robotic or generic phrasing.
+Eye-Catching & Click-Worthy: Create compelling headlines that spark curiosity and encourage readers to open and explore the blog.
+Valuable & Insightful: Provide deep insights, practical tips, and useful information that adds real value to the reader's life.
+Exciting & Addictive: Make the content so interesting that readers naturally want to read more of our blogs.
+Resourceful: Always include relevant links, references, or additional resources to help readers explore the topic further.
+Blog Structure Guidelines:
+Catchy Headline - Ensure the title is attention-grabbing, intriguing, and encourages clicks.
+Strong Introduction - Hook the reader immediately with an engaging opening, a question, a surprising fact, or a relatable anecdote.
+Well-Formatted Content - Use subheadings, bullet points, and short paragraphs to enhance readability.
+Real-World Examples & Stories - Make the content feel relatable and human by incorporating examples, case studies, or storytelling.
+Actionable Insights - Provide readers with practical takeaways they can apply.
+SEO Optimization - Use relevant keywords naturally for better visibility.
+Compelling Conclusion - End with a strong closing statement, a thought-provoking idea, or a call to action.
+Additional Resources - Include links to further reading, tools, or references.
     """
 
 
-post_data = {
-    "article": {
-        "title": "Automating Blog Posting on DEV with Python",
-        "published": True,  # Set to False to create a draft
-        "body_markdown": """
-## Automate Your Blog Posting!
-This blog was automatically posted using Python and the DEV API.
 
-### Steps:
-1. Get an API Key from DEV.
-2. Use Python's requests library.
-3. Send a POST request with your blog content.
-
-Happy blogging! 🚀
-""",
-        "tags": ["Python", "Automation", "API"],
-        "series": "Automated Blogs",
-        "canonical_url": "https://yourwebsite.com/original-post"  # Optional
-    }
-}
 
 def generate_blog(user_query):
     client = OpenAI()
@@ -84,22 +68,22 @@ def generate_blog(user_query):
     return {"blog_name" : response.blog_name, "body" :response.body_of_blog_markdown , "tags" : response.tags_for_blog}
 
 def get_trending_ai_topics():
-    url = "https://api.tavily.com/search"
-    params = {
-        "query": "Trending AI Topics",
-        "num_results": 5,  # Adjust the number of results as needed
-        "api_key": os.getenv("TAVILTY_API_KEY")
-    }
-    
-    response = requests.get(url, params=params)
-    
-    if response.status_code == 200:
-        data = response.json()
-        topics = [result["title"] for result in data.get("results", [])]
-        return topics
-    else:
-        print("Error:", response.status_code, response.text)
-        return []
+    # To install, run: pip install tavily-python
+
+    client = TavilyClient(api_key= os.getenv('TAVILY_API_KEY'))
+
+    response = client.search(
+        query="Trending news about AI like about new AI frameworks , AI models etc.."
+    )
+
+
+
+    return response["results"][0]['content']
+         
+
+         
+
+
 
 
 
@@ -115,6 +99,9 @@ def generate_custom_blog():
         tone = data.get('tone', 'professional')
         length = data.get('length', 'medium')
 
+        API_URL = "https://dev.to/api/articles"
+
+
         if not topic:
             return jsonify({"error": "Topic is required"}), 400
 
@@ -122,12 +109,20 @@ def generate_custom_blog():
 
         data = generate_blog(user_query)
 
-        dev_community_data = {"aricles": {"title": data["blog_name"] , "published": True , "body_markdown": data["body"] , "tags": data["tags"] , "series" : "Automated Blogs" , "canonical_url": "https://www.linkedin.com/in/kskkoushik135/"}}
-        
-        response = requests.post(os.getenv("API_URL"), headers=headers, json=dev_community_data)
+        if len(data["tags"]) > 4:
+            data["tags"] = data["tags"][:4]
 
+        for i in range(0 , len(data["tags"])):   
+            data["tags"][i] = data["tags"][i].replace(" ", "") 
+
+        dev_community_data = {"article": {"title": data["blog_name"] , "published": True , "body_markdown": data["body"] , "tags": data["tags"] , "series" : data["blog_name"] , "canonical_url": "https://www.linkedin.com/in/kskkoushik135/"}}
         
+        response = requests.post(API_URL, headers=headers, json = dev_community_data)
+        
+        print("================================================================================")
+        print(response.json())
         url = response.json().get("url")
+        print("url", url)
         return jsonify({
             "url": url
         })
@@ -138,34 +133,42 @@ def generate_custom_blog():
 
 @app.route('/api/generate-trending', methods=['POST'])
 def generate_trending_blog():
-    try:
-        # In a real app, you would generate content based on trends
-        # For now, we'll just generate a unique UR
-        # Fetch trending AI topics
+ 
         trending_topics = get_trending_ai_topics()
-        
-        user_query = f'''I know your are an expert blog wriritng AI agent , {trending_topics[0]} ,  make sure your blog contains high quality content , if you dont have enough info about the topic make blog post related useful topics related to AI and also provide implementations in python to how to do it , if its possible . Make sure your bloga are professional and should excite users to read the entire blog. '''
-
-        data = generate_blog(user_query)
-
-        dev_community_data = {"aricles": {"title": data["blog_name"] , "published": True , "body_markdown": data["body"] , "tags": data["tags"] , "series" : "Automated Blogs" , "canonical_url": "https://www.linkedin.com/in/kskkoushik135/"}}
-        
 
         headers = {
           "api-key": os.getenv("DEVCOMMUNITY_API_KEY"),
           "Content-Type": "application/json"
         }
 
-        response = requests.post(os.getenv("API_URL"), headers=headers, json=dev_community_data)
+        API_URL = "https://dev.to/api/articles"
+
+        print(trending_topics)
 
         
+        user_query = f'''I know your are an expert blog wriritng AI agent , {trending_topics[0]} ,  make sure your blog contains high quality content , if you dont have enough info about the topic make blog post related useful topics related to AI and also provide implementations in python to how to do it , if its possible . Make sure your bloga are professional and should excite users to read the entire blog. '''
+
+        data = generate_blog(user_query)
+
+       
+        if len(data["tags"]) > 4:
+            data["tags"] = data["tags"][:4]
+
+        for i in range(0 , len(data["tags"])):   
+            data["tags"][i] = data["tags"][i].replace(" ", "") 
+
+        dev_community_data = {"article": {"title": data["blog_name"] , "published": True , "body_markdown": data["body"] , "tags": data["tags"] , "series" : data["blog_name"] }}
+        
+        response = requests.post(API_URL, headers=headers, json = dev_community_data)
+        
+        print("================================================================================")
+        print(response.json())
         url = response.json().get("url")
+        print("url", url)
         return jsonify({
             "url": url
         })
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+  
 
 if __name__ == '__main__':
     app.run(debug=True)
