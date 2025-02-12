@@ -4,3 +4,4 @@ python-dotenv
 flask-cors
 langchain
 tavily-python
+gunicorn
