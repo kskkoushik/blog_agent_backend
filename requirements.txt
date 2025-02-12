@@ -5,3 +5,4 @@ flask-cors
 langchain
 tavily-python
 gunicorn
+openai
