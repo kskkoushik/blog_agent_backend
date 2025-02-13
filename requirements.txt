@@ -6,3 +6,4 @@ langchain
 tavily-python
 gunicorn
 openai
+streamlit
